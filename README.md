@@ -38,8 +38,8 @@
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/your-username/finance-tool.git
-   cd finance-tool
+   git clone https://github.com/hudsonsir/hudsonsir-finance-panel.git
+   cd finance-panel
    ```
     **安装依赖**
    ```bash
