@@ -5,7 +5,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 一个基于 ThinkPHP后端的现代化财务续费管理系统，帮助您管理各种服务的续费提醒和财务记录。
-![finance-panel.png](https://github.com/hudsonsir/finance-panel/blob/main/finance-panel.png))
+![finance-panel.png](https://github.com/hudsonsir/finance-panel/blob/main/finance-panel.png)
 ## 功能特性
 
 ### 核心功能
