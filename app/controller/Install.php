@@ -34,12 +34,17 @@ class Install extends Base
 
     public function index()
     {
+        $rootPath = app()->getRootPath();
+        $envExamplePath = $rootPath . '.env.example';
+        
         $requirements = [
             'PHP >= 7.4' => version_compare(PHP_VERSION, '7.4.0', '>='),
             'PDO_MySQL' => extension_loaded("pdo_mysql"),
             'CURL' => extension_loaded("curl"),
             'ZipArchive' => class_exists("ZipArchive"),
             'runtime写入权限' => is_writable(app()->getRuntimePath()),
+            '根目录写入权限' => is_writable($rootPath) || (file_exists($rootPath . '.env') && is_writable($rootPath . '.env')),
+            '.env.example文件存在' => file_exists($envExamplePath),
         ];
         reset_opcache();
         $step = Request::param('step');
@@ -65,7 +70,6 @@ class Install extends Base
             return msg('error', $validate->getError());
         }
 
-        // 安全改进：验证输入，防止注入
         $hostname = preg_replace('/[^a-zA-Z0-9._-]/', '', $params['hostname']); // 只允许字母数字点下划线横线
         $database = preg_replace('/[^a-zA-Z0-9_]/', '', $params['database']); // 只允许字母数字下划线
         $hostport = intval($params['hostport']);
@@ -77,20 +81,37 @@ class Install extends Base
         try {
             new PDO($dsn, $params['username'], $params['password']);
         } catch (\Exception $e) {
-            // 安全改进：不直接返回详细错误信息
             return msg('error', '数据库连接失败，请检查配置信息');
         }
         try {
-            $envFile = file_get_contents(app()->getRootPath() . '.env.example');
+            $envExamplePath = app()->getRootPath() . '.env.example';
+            if (!file_exists($envExamplePath)) {
+                return msg('error', '.env.example 文件不存在，请确保文件已上传');
+            }
+            
+            if (!is_readable($envExamplePath)) {
+                return msg('error', '.env.example 文件不可读，请检查文件权限');
+            }
+            
+            $envFile = file_get_contents($envExamplePath);
+            if ($envFile === false) {
+                return msg('error', '读取 .env.example 文件失败');
+            }
+            
             $envOperation = new EnvOperation($envFile);
             foreach (array_keys($rules) as $value) {
                 $envOperation->set(mb_strtoupper($value), $params[$value]);
             }
+            
             $envOperation->save();
         } catch (\Exception $e) {
-            // 安全改进：记录详细错误到日志，但只返回通用错误信息
             \think\facade\Log::error('保存环境配置失败: ' . $e->getMessage());
-            return msg('error', '保存配置失败，请检查文件权限');
+            
+            $errorMsg = $e->getMessage();
+            if (strpos($errorMsg, '权限') !== false || strpos($errorMsg, 'permission') !== false) {
+                return msg('error', $errorMsg . '。请设置项目根目录或 .env 文件的写入权限（建议 755 或 777）');
+            }
+            return msg('error', $errorMsg);
         }
         return msg();
     }
@@ -104,7 +125,6 @@ class Install extends Base
                 throw new Exception('数据库 install.sql 文件不存在');
             }
             $install_sql = file($filename);
-            //写入数据库
             $execSQL = new ExecSQL();
             $install_sql = $execSQL->purify($install_sql);
             foreach ($install_sql as $sql) {
@@ -114,14 +134,11 @@ class Install extends Base
                 }
             }
             
-            // 在所有表创建完成后，设置默认邮件模板
-            // 确保数据库前缀已设置
             if (file_exists(app()->getRootPath() . '.env')) {
                 app()->loadEnv();
             }
             \think\facade\Db::setConfig(['prefix' => 'panel_'], 'mysql');
             
-            // 更新默认邮件通道的模板
             $defaultTemplate = \app\service\EmailService::getDefaultTemplate();
             $emailChannel = \think\facade\Db::name('notification')
                 ->where('channel_type', 'email')
@@ -137,7 +154,6 @@ class Install extends Base
                     ]);
             }
         } catch (\Exception $e) {
-            // 安全改进：记录详细错误到日志，但只返回通用错误信息
             \think\facade\Log::error('数据库初始化失败: ' . $e->getMessage());
             return msg('error', '数据库初始化失败，请检查配置和权限');
         }
